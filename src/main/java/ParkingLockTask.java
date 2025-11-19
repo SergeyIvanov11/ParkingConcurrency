@@ -1,6 +1,6 @@
 public class ParkingLockTask implements Runnable {
-    private Car car;
-    private ParkingLock lock;
+    Car car;
+    ParkingLock lock;
 
     public ParkingLockTask(Car car, ParkingLock lock) {
         this.car = car;
@@ -9,14 +9,15 @@ public class ParkingLockTask implements Runnable {
 
     @Override
     public void run() {
-        if (lock.tryEnter(car)) {
-            try {
-                Thread.sleep((long) (1000 + Math.random() * 5000));
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } finally {
-                lock.leave(car);
-            }
+        boolean parked = lock.tryEnter(car);
+
+        if (!parked) return;
+
+        try {
+            Thread.sleep((long) (Math.random() * 100 + 500));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
+        lock.leave(car);
     }
 }

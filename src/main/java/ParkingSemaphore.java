@@ -2,8 +2,8 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 public class ParkingSemaphore {
-    private final Semaphore semaphore;
-    private final int maxWaitTime; // секунд ожидания
+    final Semaphore semaphore;
+    final int maxWaitTime; // секунд ожидания
 
     public ParkingSemaphore(int spots, int maxWaitTime) {
         this.semaphore = new Semaphore(spots, true);

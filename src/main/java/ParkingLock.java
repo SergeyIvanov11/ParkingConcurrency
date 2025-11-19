@@ -1,3 +1,6 @@
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
@@ -5,59 +8,89 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class ParkingLock {
-    private final Lock lock = new ReentrantLock(true);
-    private final Condition spotAvailable = lock.newCondition();
-    private final AtomicInteger freeSpots;
-    private final long maxWaitTime; // секунд ожидания
+    private final List<ReentrantLock> spots;
+    private final Duration maxWaitTime; // секунд ожидания
+    private final ReentrantLock commonLock;
+    private final Condition freeSpot;  // указывает что появилось свободное место
 
-    public ParkingLock(int spots, int maxWaitTime) {
-        this.freeSpots = new AtomicInteger(spots);
-        this.maxWaitTime = (long) maxWaitTime * 1000;
+    public ParkingLock(int spotsNumber, int maxWaitTime) {
+        this.maxWaitTime = Duration.ofMillis(maxWaitTime * 100);
+        this.spots = new ArrayList<>();
+        for (int i = 0; i < spotsNumber; i++) {
+            spots.add(new ReentrantLock());
+        }
+        this.commonLock = new ReentrantLock(true);
+        this.freeSpot = commonLock.newCondition();
     }
 
     public boolean tryEnter(Car car) {
         System.out.println("Машина №" + car.getNumber() + " пытается въехать на парковку...");
+        long deadline = System.currentTimeMillis() + maxWaitTime.toMillis();
 
-        long startTime = System.currentTimeMillis();
-
-        lock.lock();
-
+        commonLock.lock();
         try {
-            while (freeSpots.get() == 0) {
-                long elapsed = System.currentTimeMillis() - startTime;
-                long remaining = maxWaitTime - elapsed;
+            int spot = findFreeSpot(car);
+            if (spot != -1) {
+                return true;
+            }
 
-                if (remaining <= 0) {
-                    System.out.println("Машина " + car.getNumber() + " не дождалась места и уехала.");
+            while (true) {
+                long timeLeft = deadline - System.currentTimeMillis();
+                if (timeLeft <= 0) {
+                    System.out.println("Машина №" + car.getNumber() + " не дождалась места и уехала.");
                     return false;
                 }
 
-                try {
-                    // ждём интервалами, периодически проверяем условие
-                    spotAvailable.await(Math.min(remaining, 500), TimeUnit.MILLISECONDS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    System.out.println("Машина " + car.getNumber() + " была прервана при ожидании.");
+                boolean signaled = freeSpot.await(timeLeft, TimeUnit.MILLISECONDS);
+                if (!signaled) {
+                    System.out.println("Машина №" + car.getNumber() + " не дождалась места и уехала.");
                     return false;
+                }
+
+                spot = findFreeSpot(car);
+                if (spot != -1) {
+                    return true;
                 }
             }
-            freeSpots.decrementAndGet();
-            System.out.println("Машина №" + car.getNumber() + " заехала на парковку. Свободных мест: " + freeSpots);
-            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
         } finally {
-            lock.unlock();
+            commonLock.unlock();
         }
+    }
+
+    private int findFreeSpot(Car car) {
+        for (int i = 0; i < spots.size(); i++) {
+            ReentrantLock spot = spots.get(i);
+            if (spot.tryLock()) {
+                car.setParkedSpot(i);
+                System.out.println("Машина №" + car.getNumber() + " заняла место " + (i + 1));
+                return i;
+            }
+        }
+        return -1;
     }
 
     public void leave(Car car) {
-        lock.lock();
+        Integer spotIndex = car.getParkedSpot();
+        if (spotIndex == null) return;
+
+        ReentrantLock spot = spots.get(spotIndex);
+
         try {
-            freeSpots.incrementAndGet();
-            System.out.println("Машина №" + car.getNumber() + " покинула парковку. Свободных мест: " + freeSpots);
-            spotAvailable.signal(); // будим одну ожидающую машину
+            spot.unlock();
+            System.out.println("Машина №" + car.getNumber() + " покинула место " + (spotIndex + 1));
+        } catch (IllegalMonitorStateException e) {
+            e.printStackTrace();
+        }
+
+        commonLock.lock();
+        try {
+            car.setParkedSpot(null);
+            freeSpot.signal(); // сигнал одной ожидающей машине
         } finally {
-            lock.unlock();
+            commonLock.unlock();
         }
     }
-
 }
