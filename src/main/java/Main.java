@@ -28,7 +28,7 @@ public class Main {
                 Thread thread = new Thread(new ParkingLockTask(car, lock));
 
                 thread.start();
-                Thread.sleep(500);
+                Thread.sleep(50);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }

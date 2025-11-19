@@ -1,3 +1,4 @@
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -8,12 +9,12 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class ParkingLock {
     private final List<ReentrantLock> spots;
-    private final long maxWaitTime; // секунд ожидания
+    private final Duration maxWaitTime; // секунд ожидания
     private final ReentrantLock commonLock;
     private final Condition freeSpot;  // указывает что появилось свободное место
 
     public ParkingLock(int spotsNumber, int maxWaitTime) {
-        this.maxWaitTime = (long) maxWaitTime * 1000;
+        this.maxWaitTime = Duration.ofMillis(maxWaitTime * 100);
         this.spots = new ArrayList<>();
         for (int i = 0; i < spotsNumber; i++) {
             spots.add(new ReentrantLock());
@@ -24,7 +25,7 @@ public class ParkingLock {
 
     public boolean tryEnter(Car car) {
         System.out.println("Машина №" + car.getNumber() + " пытается въехать на парковку...");
-        long deadline = System.currentTimeMillis() + maxWaitTime;
+        long deadline = System.currentTimeMillis() + maxWaitTime.toMillis();
 
         commonLock.lock();
         try {

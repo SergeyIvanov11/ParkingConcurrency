@@ -14,7 +14,7 @@ public class ParkingLockTask implements Runnable {
         if (!parked) return;
 
         try {
-            Thread.sleep((long) (Math.random() * 3000 + 2000));
+            Thread.sleep((long) (Math.random() * 100 + 500));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
